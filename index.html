@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>핑꾸핑꾸</title>
+  <style>
+    :root{
+      --ui-bg: rgba(18, 8, 24, .78);
+      --ui-border: rgba(255, 182, 245, .85);
+      --ui-text: rgba(255, 238, 252, .95);
+      --accent: rgba(255, 110, 220, .95);
+    }
+
+    *{ box-sizing: border-box; }
+    html, body { height:100%; margin:0; background:#0b0610; font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif; }
+
+    /* 화면(카메라) */
+    #viewport{
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      touch-action: none; 
+      background: radial-gradient(1200px 900px at 60% 30%, rgba(255,135,225,.14), transparent 55%),
+                  radial-gradient(900px 700px at 30% 70%, rgba(165,90,255,.12), transparent 55%),
+                  linear-gradient(180deg, #08040d 0%, #0b0610 60%, #07030b 100%);
+    }
+
+    /* 맵 */
+    #world{
+      position:absolute;
+      left:0; top:0;
+      width: 2200px;
+      height: 1600px;
+      transform: translate3d(0,0,0);
+      image-rendering: pixelated;
+      background:
+        /* 픽셀 타일 격자 */
+        linear-gradient(rgba(255,160,230,.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,160,230,.10) 1px, transparent 1px),
+        /* 오버레이 */
+        radial-gradient(900px 600px at 35% 25%, rgba(255,120,220,.18), transparent 60%),
+        radial-gradient(650px 520px at 75% 70%, rgba(190,120,255,.15), transparent 62%),
+        radial-gradient(520px 420px at 15% 75%, rgba(255,200,245,.10), transparent 65%),
+        /* 바닥 */
+        linear-gradient(180deg, rgba(30,10,40,1), rgba(12,6,20,1));
+      background-size:
+        16px 16px,
+        16px 16px,
+        auto, auto, auto,
+        auto;
+      filter: saturate(1.25) contrast(1.05);
+    }
+
+    /* 반짝이(그냥 분위기용...ㅎ) */
+    .sparkle{
+      position:absolute;
+      width: 2px;
+      height: 2px;
+      background: rgba(255, 230, 255, .9);
+      box-shadow: 0 0 8px rgba(255,170,240,.9);
+      opacity: .7;
+      animation: twinkle 2.8s infinite ease-in-out;
+      image-rendering: pixelated;
+    }
+    @keyframes twinkle{
+      0%,100% { transform: scale(1); opacity:.55; }
+      50% { transform: scale(1.8); opacity: .95; }
+    }
+
+    /* 아이템 */
+    .item{
+      position:absolute;
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255, 210, 250, .85);
+      background: linear-gradient(180deg, rgba(255,110,220,.9), rgba(145,80,255,.75));
+      box-shadow:
+        0 0 0 2px rgba(0,0,0,.25),
+        0 10px 20px rgba(0,0,0,.25),
+        0 0 14px rgba(255,120,235,.45);
+      border-radius: 4px;
+      cursor: pointer;
+      image-rendering: pixelated;
+      transition: transform .08s ease;
+    }
+    .item:hover{ transform: translateY(-1px) scale(1.03); }
+    .item:active{ transform: translateY(0px) scale(.98); }
+
+    /* 바닥 장식 */
+    .patch{
+      position:absolute;
+      width: 160px; height: 110px;
+      border-radius: 12px;
+      background: radial-gradient(closest-side, rgba(255,140,225,.18), transparent 70%),
+                  radial-gradient(closest-side, rgba(180,120,255,.14), transparent 70%);
+      filter: blur(.2px);
+      opacity: .9;
+    }
+
+    /* UI 패널 */
+    #hud{
+      position:absolute;
+      left: 16px;
+      top: 16px;
+      width: min(360px, calc(100vw - 32px));
+      padding: 12px 12px 10px;
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,.35);
+      color: var(--ui-text);
+      backdrop-filter: blur(8px);
+    }
+    #hud h1{
+      margin: 0 0 6px;
+      font-size: 14px;
+      letter-spacing: .2px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    #badge{
+      display:inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 170, 245, .75);
+      color: rgba(255, 225, 252, .95);
+      background: rgba(255, 110, 220, .12);
+    }
+    #tip{
+      margin: 0 0 10px;
+      font-size: 12px;
+      opacity: .9;
+      line-height: 1.35;
+    }
+    #coords{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      opacity:.95;
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(255, 190, 250, .28);
+    }
+
+    /* 정보창 */
+    #panel{
+      position:absolute;
+      right: 16px;
+      top: 16px;
+      width: min(420px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow:auto;
+      padding: 12px;
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,.35);
+      color: var(--ui-text);
+      backdrop-filter: blur(8px);
+      display:none;
+    }
+    #panel.open{ display:block; }
+    #panelHeader{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    #panelTitle{
+      margin:0;
+      font-size: 14px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    #closeBtn{
+      border: 1px solid rgba(255, 200, 250, .55);
+      background: rgba(255, 110, 220, .10);
+      color: var(--ui-text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      cursor:pointer;
+      font-size: 12px;
+    }
+    #closeBtn:hover{ border-color: rgba(255,220,255,.85); }
+
+    .statRow{
+      display:flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(255, 190, 250, .25);
+      font-size: 12px;
+    }
+    .statRow:last-child{ border-bottom: 0; }
+
+    .pill{
+      display:inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 190, 250, .55);
+      background: rgba(255, 255, 255, .05);
+      font-size: 11px;
+      opacity: .95;
+    }
+
+    #crosshair{
+      position:absolute;
+      left: 50%;
+      top: 50%;
+      width: 18px; height: 18px;
+      transform: translate(-50%, -50%);
+      pointer-events:none;
+      opacity:.35;
+      filter: drop-shadow(0 0 6px rgba(255,120,235,.5));
+    }
+    #crosshair::before, #crosshair::after{
+      content:"";
+      position:absolute;
+      left: 50%;
+      top: 50%;
+      background: rgba(255, 210, 250, .9);
+      transform: translate(-50%, -50%);
+    }
+    #crosshair::before{ width: 18px; height: 2px; }
+    #crosshair::after{ width: 2px; height: 18px; }
+
+    /* 드래그 중 커서 */
+    .dragging { cursor: grabbing; }
+    #viewport { cursor: grab; }
+    .noGrab { cursor: default; }
+  </style>
+</head>
+<body>
+  <div id="viewport" aria-label="game viewport">
+    <div id="world" aria-label="world"></div>
+
+    <div id="hud">
+      <h1>Welcome to DREAM WORLD<span id="badge">drag to move</span></h1>
+      <p id="tip">
+        맵을 <b>드래그</b>해서 돌아다닐 수 있어요. 바닥에 떨어진 <b>네모를</b> 클릭하면 정보를 볼 수 있어요.
+        <br/>ESC로 닫기
+      </p>
+      <div id="coords">
+        <div>camX: <span id="camX">0</span></div>
+        <div>camY: <span id="camY">0</span></div>
+        <div><span class="pill" id="hint">아이템은 총 7개</span></div>
+      </div>
+    </div>
+
+    <div id="panel" role="dialog" aria-modal="false">
+      <div id="panelHeader">
+        <h2 id="panelTitle">정보</h2>
+        <button id="closeBtn" type="button">닫기</button>
+      </div>
+      <div id="panelBody"></div>
+    </div>
+
+    <div id="crosshair"></div>
+  </div>
+
+  <script>
+    // ----- 설정 -----
+    const world = document.getElementById('world');
+    const viewport = document.getElementById('viewport');
+    const panel = document.getElementById('panel');
+    const panelTitle = document.getElementById('panelTitle');
+    const panelBody = document.getElementById('panelBody');
+    const closeBtn = document.getElementById('closeBtn');
+    const camXEl = document.getElementById('camX');
+    const camYEl = document.getElementById('camY');
+
+    const WORLD_W = 2200;
+    const WORLD_H = 1600;
+
+    // 카메라
+    let camX = -200;  
+    let camY = -140;
+
+    // 드래그 상태
+    let dragging = false;
+    let pointerId = null;
+    let startX = 0, startY = 0;
+    let startCamX = 0, startCamY = 0;
+    let moved = false;
+
+    // 클릭과 드래그 구분용
+    const DRAG_THRESHOLD = 4;
+
+    // ----- 유틸 -----
+    function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+    function applyCamera(){
+      // 카메라는 world를 반대로 끌고 다니는 느낌
+      // viewport 크기에 따라 범위 제한
+      const vw = viewport.clientWidth;
+      const vh = viewport.clientHeight;
+
+      // world가 viewport보다 작아도 가운데쯤 유지되게 처리
+      const minX = Math.min(0, vw - WORLD_W);
+      const minY = Math.min(0, vh - WORLD_H);
+      const maxX = 0;
+      const maxY = 0;
+
+      camX = clamp(camX, minX, maxX);
+      camY = clamp(camY, minY, maxY);
+
+      world.style.transform = `translate3d(${camX}px, ${camY}px, 0)`;
+      camXEl.textContent = Math.round(camX);
+      camYEl.textContent = Math.round(camY);
+    }
+
+    function openPanel(data){
+      panel.classList.add('open');
+      panelTitle.innerHTML = `상태창 <span class="pill">${escapeHtml(data.tag)}</span>`;
+      panelBody.innerHTML = `
+        <div class="statRow"><div>이름</div><div><b>${escapeHtml(data.name)}</b></div></div>
+        <div class="statRow"><div>설명</div><div style="text-align:right; max-width: 260px;">${escapeHtml(data.desc)}</div></div>
+        <div class="statRow"><div>좌표</div><div>${data.x}, ${data.y}</div></div>
+        <div class="statRow"><div>희귀도</div><div>${'★'.repeat(data.rarity)}${'☆'.repeat(5-data.rarity)}</div></div>
+        <div class="statRow"><div>효과</div><div>${escapeHtml(data.effect)}</div></div>
+      `;
+    }
+    function closePanel(){
+      panel.classList.remove('open');
+    }
+
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, s => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[s]));
+    }
+
+    // ----- 월드 꾸미기 -----
+    function addPatch(x,y,w,h){
+      const p = document.createElement('div');
+      p.className = 'patch';
+      p.style.left = x + 'px';
+      p.style.top = y + 'px';
+      p.style.width = w + 'px';
+      p.style.height = h + 'px';
+      p.style.transform = `rotate(${(Math.random()*10-5).toFixed(1)}deg)`;
+      world.appendChild(p);
+    }
+
+    for(let i=0;i<9;i++){
+      addPatch(
+        120 + Math.random()*(WORLD_W-320),
+        90 + Math.random()*(WORLD_H-260),
+        120 + Math.random()*220,
+        80 + Math.random()*160
+      );
+    }
+
+    function addSparkle(x,y,delay){
+      const s = document.createElement('div');
+      s.className = 'sparkle';
+      s.style.left = x + 'px';
+      s.style.top = y + 'px';
+      s.style.animationDelay = delay + 's';
+      s.style.opacity = (0.35 + Math.random()*0.55).toFixed(2);
+      world.appendChild(s);
+    }
+    for(let i=0;i<90;i++){
+      addSparkle(
+        Math.floor(Math.random()*WORLD_W),
+        Math.floor(Math.random()*WORLD_H),
+        (Math.random()*2.8).toFixed(2)
+      );
+    }
+
+    // ----- 아이템 생성 -----
+    const items = [
+      { id:'it1', x: 260,  y: 260,  tag:'ITEM', name:'딸기 사탕', desc:'먹으면 기분이 살짝 좋아지는 듯한 맛.', rarity:2, effect:'+1 달달함' },
+      { id:'it2', x: 780,  y: 420,  tag:'NOTE', name:'빛나는 쪽지', desc:'“어딘가에 별이 떨어졌다.”', rarity:3, effect:'힌트 획득' },
+      { id:'it3', x: 520,  y: 980,  tag:'KEY',  name:'분홍 열쇠', desc:'작은 상자를 열 수 있을 것 같다.', rarity:4, effect:'잠금 해제' },
+      { id:'it4', x: 1220, y: 820,  tag:'RELIC',name:'꿈 조각', desc:'손에 쥐면 약간 따뜻하다.', rarity:5, effect:'???' },
+      { id:'it5', x: 1680, y: 360,  tag:'BOX', name:'분홍 상자', desc:'뭔가 들어있을지도? (아직은 장식...ㅎ 구현 안 함)', rarity:2, effect:'열기 불가' },
+      { id:'it6', x: 1860, y: 1180, tag:'NPC?',name:'네모 친구', desc:'말은 안 하지만 반짝이고 있다.', rarity:3, effect:'기분 전파' },
+      { id:'it7', x: 980,  y: 1240, tag:'PORTAL',name:'별자리 포탈', desc:'가까이 가면 흔들릴 것 같은 느낌.', rarity:4, effect:'워프(미구현...ㅎ)' },
+    ];
+
+    function spawnItems(){
+      items.forEach(data=>{
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.style.left = data.x + 'px';
+        el.style.top = data.y + 'px';
+        el.dataset.itemId = data.id;
+        el.title = data.name;
+
+        // 클릭 시 패널 오픈
+        el.addEventListener('pointerdown', (e)=>{
+          e.stopPropagation();
+        });
+
+        el.addEventListener('click', (e)=>{
+          if(moved) return;
+          openPanel(data);
+        });
+
+        world.appendChild(el);
+      });
+    }
+
+    spawnItems();
+
+    // ----- 드래그(카메라 이동) -----
+    viewport.addEventListener('pointerdown', (e)=>{
+		
+      if (e.button !== undefined && e.button !== 0) return; // 좌클릭/터치만
+      dragging = true;
+      moved = false;
+      pointerId = e.pointerId;
+      viewport.setPointerCapture(pointerId);
+      startX = e.clientX;
+      startY = e.clientY;
+      startCamX = camX;
+      startCamY = camY;
+      viewport.classList.add('dragging');
+    });
+
+    viewport.addEventListener('pointermove', (e)=>{
+      if(!dragging || e.pointerId !== pointerId) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if(Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) moved = true;
+
+      camX = startCamX + dx;
+      camY = startCamY + dy;
+      applyCamera();
+    });
+
+    function endDrag(e){
+      if(!dragging) return;
+      dragging = false;
+      viewport.classList.remove('dragging');
+      try{ viewport.releasePointerCapture(pointerId); } catch {}
+      pointerId = null;
+      
+      setTimeout(()=>{ moved = false; }, 0);
+    }
+
+    viewport.addEventListener('pointerup', endDrag);
+    viewport.addEventListener('pointercancel', endDrag);
+    viewport.addEventListener('pointerleave', endDrag);
+
+    // ----- 패널 닫기 -----
+    closeBtn.addEventListener('click', closePanel);
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') closePanel();
+    });
+
+    // ----- 리사이즈 시 카메라 범위 재적용 -----
+    window.addEventListener('resize', applyCamera);
+
+    // 초기 적용
+    applyCamera();
+  </script>
+</body>
+</html>

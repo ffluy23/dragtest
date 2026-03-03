@@ -441,6 +441,10 @@
       camY = startCamY + dy;
       applyCamera();
     });
+    
+    closeBtn.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+});
 
     function endDrag(e){
       if(!dragging) return;
